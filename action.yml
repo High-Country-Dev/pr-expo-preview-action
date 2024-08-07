@@ -1,0 +1,82 @@
+name: "PR Expo Preview"
+description: "Run EAS Build for Expo projects in a monorepo using pnpm"
+inputs:
+  project_path:
+    description: "Path to the Expo project within the monorepo"
+    required: true
+    default: "apps/expo"
+  github-token:
+    description: "GitHub token"
+    required: true
+  expo-token:
+    description: "Expo token"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Check for EXPO_TOKEN
+      shell: bash
+      run: |
+        if [ -z "${{ inputs.expo-token }}" ]; then
+          echo "You must provide an EXPO_TOKEN secret linked to this project's Expo account in this repo's secrets. Learn more: https://docs.expo.dev/eas-update/github-actions"
+          exit 1
+        fi
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 18
+
+    - name: Install pnpm
+      shell: bash
+      run: npm install -g pnpm
+
+    - name: Setup Expo and EAS
+      uses: expo/expo-github-action@v8
+      with:
+        eas-version: latest
+        token: ${{ inputs.expo-token }}
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        cd ${{ inputs.project_path }}
+        pnpm install
+
+    - name: EAS Build
+      shell: bash
+      run: |
+        cd ${{ inputs.project_path }}
+        if [[ "${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == "refs/heads/master" ]]; then
+          eas build --platform all --profile production --no-wait --auto-submit --non-interactive
+        elif [[ "${{ github.ref }}" == "refs/heads/staging" ]]; then
+          eas build --platform all --profile staging --no-wait --auto-submit --non-interactive
+        elif [[ "${{ github.ref }}" == "refs/heads/dev" ]]; then
+          eas build --platform all --profile development --no-wait --auto-submit --non-interactive
+        else
+          echo "Branch not recognized for EAS build"
+          exit 1
+        fi
+
+    - name: Get version numbers
+      shell: bash
+      run: |
+        cd ${{ inputs.project_path }}
+        ANDROID_VERSION=$(eas build:version:get --platform android | grep "Android versionCode" | awk '{print $NF}')
+        IOS_VERSION=$(eas build:version:get --platform ios | grep "iOS buildNumber" | awk '{print $NF}')
+        echo "ANDROID_VERSION=$ANDROID_VERSION" >> $GITHUB_ENV
+        echo "IOS_VERSION=$IOS_VERSION" >> $GITHUB_ENV
+
+    - name: Create Android tag
+      shell: bash
+      run: |
+        git config user.name github-actions
+        git config user.email github-actions@github.com
+        git tag build-android-${ANDROID_VERSION}
+        git push origin build-android-${ANDROID_VERSION}
+
+    - name: Create iOS tag
+      shell: bash
+      run: |
+        git tag build-ios-${IOS_VERSION}
+        git push origin build-ios-${IOS_VERSION}

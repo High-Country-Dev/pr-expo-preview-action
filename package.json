@@ -1,0 +1,15 @@
+{
+  "name": "pr-expo-preview-action",
+  "version": "1.0.0",
+  "description": "GitHub Action for preview builds of expo app on PRs",
+  "main": "action.yml",
+  "keywords": [
+    "github",
+    "action",
+    "eas",
+    "build",
+    "expo"
+  ],
+  "author": "Declan Nishiyama",
+  "license": "MIT"
+}
